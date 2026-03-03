@@ -11,6 +11,7 @@ The project now includes a premium, avant-garde web dashboard that visualizes th
 - **System Event Log**: Real-time telemetry feed from the kernel.
 
 For a detailed list of all capabilities, see [FEATURES.md](./FEATURES.md).
+For the technical system design and block flow, see [SYSTEM_DESIGN.md](./SYSTEM_DESIGN.md).
 
 ### Running the Web UI
 ```bash
