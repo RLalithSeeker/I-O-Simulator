@@ -77,6 +77,8 @@ export class SimulationEngine {
         request.status = IOStatus.COMPLETE;
         request.completionTime = Date.now();
         this.log(`OS: process unblocked, control returned to user`, id);
+
+        return request;
     }
 
     private delay(ms: number) {

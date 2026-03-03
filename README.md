@@ -1,35 +1,42 @@
-# OS I/O Request Handling Simulator
+# OS I/O Request Handling Simulator (v2.1)
 
-Design, Simulation and Performance Analysis of an OS I/O Request Handling Simulator (Polling vs Interrupt-Driven I/O).
+Design, Simulation and Performance Analysis of an OS I/O Request Handling Simulator featuring an Advanced Web UI and a Legacy CLI.
 
-## Overview
-This conceptual execution simulator demonstrates how an Operating System handles I/O requests through the complete pipeline: 
-`Application → System Call → Device Driver → Controller → I/O Device`. 
+## 🚀 Interactive Web UI
+The project now includes a premium, avant-garde web dashboard that visualizes the I/O pipeline and performance deltas in real-time.
 
-It clearly visualizes the behavioral and performance contrast between **Polling-based I/O** (busy waiting) and **Interrupt-driven I/O**.
+**Key Features:**
+- **Dynamic Pipeline Visualization**: Live animation of requests moving from App to Hardware.
+- **Intelligence Analytics**: CPU Availability comparison and Efficiency Scoring.
+- **System Event Log**: Real-time telemetry feed from the kernel.
 
-## Project Architecture
-- `models.py`: Data structures for `IORequest`, `IOMode`, and `IOStatus`.
-- `components.py`: Core simulation logic involving the Kernel, Driver, Controller, and Device hardware.
-- `visualization.py`: Utilities for generating ASCII flowcharts and Matplotlib charts.
-- `main.py`: Interactive CLI entry point to run the demonstration.
+For a detailed list of all capabilities, see [FEATURES.md](./FEATURES.md).
 
-## Setup & Run
-
-### Prerequisites
-You need Python 3.x installed. For the visual charts, `matplotlib` is required.
+### Running the Web UI
 ```bash
-pip install matplotlib
+cd "C:\Users\starl\woxsen\SEM 4\OS\io_simulator\io-simulator-web"
+npm install
+npm run dev
 ```
+Navigate to `http://localhost:3000`.
 
-### Running the Simulator
+## 🖥️ Legacy CLI
+The original Python-based simulator is preserved in the `cli-version` branch and locally in the root directory.
+
+### Running the CLI
 ```bash
 cd "C:\Users\starl\woxsen\SEM 4\OS\io_simulator"
 python main.py
 ```
 
-## Expected Outputs
-1. **Timestamped Event Timeline**: Prints every micro-step of an I/O request flowing through the system.
-2. **Interrupt Handling Flowchart**: Visual ASCII flowchart showing ISR sequence.
-3. **Performance Dashboard**: Terminal output showing wasted CPU instructions vs response time.
-4. **Graphical Comparison**: `comparison_chart.png` is generated, summarizing the Polling vs Interrupt improvements graphically.
+## 🏗️ Project Architecture
+- `io-simulator-web/`: Modern Next.js application (App, Logic, Components).
+- `models.py`: Python data structures for CLI.
+- `components.py`: Core simulation logic for CLI.
+- `visualization.py`: CLI-based charting utilities.
+- `main.py`: CLI entry point.
+
+## 📊 Expected Outputs
+1. **CPU Availability Analysis**: High-contrast visual comparison of multitasking capacity.
+2. **Efficiency Delta**: Logical proof of why Interrupts outperform Polling.
+3. **Real-time Pipeline Tracking**: Step-by-step visual audit of hardware abstraction.

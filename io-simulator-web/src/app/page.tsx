@@ -52,6 +52,12 @@ export default function IOSimulatorDashboard() {
   const [serviceTime, setServiceTime] = useState(300);
   const [isSimulating, setIsSimulating] = useState(false);
 
+  // Persistent history for comparison
+  const [history, setHistory] = useState<Record<string, { rt: number; checks: number }>>({
+    ['INTERRUPT']: { rt: 0, checks: 0 },
+    ['POLLING']: { rt: 0, checks: 0 }
+  });
+
   const engineRef = useRef<SimulationEngine | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -69,7 +75,19 @@ export default function IOSimulatorDashboard() {
   const runSimulation = async () => {
     if (!engineRef.current || isSimulating) return;
     setIsSimulating(true);
-    await engineRef.current.runRequest('Disk0', IOType.READ, mode, 4.0, serviceTime);
+    const result = await engineRef.current.runRequest('Disk0', IOType.READ, mode, 4.0, serviceTime);
+
+    // Update comparison history
+    if (result) {
+      setHistory(prev => ({
+        ...prev,
+        [mode]: {
+          rt: result.completionTime! - result.arrivalTime,
+          checks: result.cpuChecks
+        }
+      }));
+    }
+
     setIsSimulating(false);
   };
 
@@ -80,28 +98,31 @@ export default function IOSimulatorDashboard() {
 
   const currentRequest = requests[requests.length - 1];
 
+  const getAvailability = (checks: number) => Math.max(10, 100 - (checks * 4)); // Min 10% for visual presence
+
   const chartData = [
-    { name: 'Polling', rt: requests.filter(r => r.mode === IOMode.POLLING).reduce((acc, r) => acc + (r.completionTime! - r.arrivalTime), 0) / (requests.filter(r => r.mode === IOMode.POLLING).length || 1), checks: requests.filter(r => r.mode === IOMode.POLLING).reduce((acc, r) => acc + r.cpuChecks, 0) / (requests.filter(r => r.mode === IOMode.POLLING).length || 1) },
-    { name: 'Interrupt', rt: requests.filter(r => r.mode === IOMode.INTERRUPT).reduce((acc, r) => acc + (r.completionTime! - r.arrivalTime), 0) / (requests.filter(r => r.mode === IOMode.INTERRUPT).length || 1), checks: 0 }
+    {
+      name: 'Polling Loop',
+      availability: getAvailability(history['POLLING'].checks),
+      checks: history['POLLING'].checks
+    },
+    {
+      name: 'Interrupt-Driven',
+      availability: getAvailability(history['INTERRUPT'].checks),
+      checks: history['INTERRUPT'].checks
+    }
   ];
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-200 p-8 font-sans selection:bg-sky-500/30">
-      {/* Background Orbs for Depth */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-sky-500/5 rounded-full blur-[120px] animate-pulse-glow" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-500/5 rounded-full blur-[150px]" />
-      </div>
-
+    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] p-8 font-sans selection:bg-sky-500/20">
       <div className="max-w-[1600px] mx-auto relative z-10">
-        {/* Header - Minimal & Purposeful */}
-        <header className="flex justify-between items-end mb-12 border-b border-slate-800/50 pb-8">
+        <header className="flex justify-between items-end mb-12 border-b border-slate-200 pb-8">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="h-[2px] w-8 bg-sky-500" />
-              <span className="text-[10px] font-bold text-sky-500 uppercase tracking-[0.3em]">Hardware Abstraction</span>
+              <span className="text-[10px] font-bold text-sky-600 uppercase tracking-[0.3em]">Hardware Abstraction</span>
             </div>
-            <h1 className="text-5xl font-extrabold tracking-tighter text-white">
+            <h1 className="text-5xl font-extrabold tracking-tighter text-slate-900">
               IO<span className="text-sky-500">_</span>SIMULATOR<span className="text-slate-700 text-2xl font-light ml-2">v2.1</span>
             </h1>
           </div>
@@ -203,30 +224,30 @@ export default function IOSimulatorDashboard() {
               </div>
             </div>
 
-            {/* Console Log - High contrast, fixed width font */}
+            {/* Console Log - High contrast, light background */}
             <div className="bento-item p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-slate-500" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">System_Event_Log</span>
+                  <Terminal className="w-4 h-4 text-slate-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">System_Event_Log</span>
                 </div>
                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               </div>
               <div className="h-[240px] overflow-y-auto font-mono text-xs space-y-2 pr-4 custom-scrollbar">
                 {logs.length > 0 ? logs.map((log, i) => (
-                  <div key={i} className="flex gap-6 border-b border-white/5 py-2 group hover:bg-white/[0.02] transition-colors">
-                    <span className="text-slate-600 font-bold min-w-[70px]">{(log.timestamp / 1000).toFixed(3)}s</span>
+                  <div key={i} className="flex gap-6 border-b border-slate-100 py-2 group hover:bg-slate-50 transition-colors">
+                    <span className="text-slate-400 font-bold min-w-[70px]">{(log.timestamp / 1000).toFixed(3)}s</span>
                     <span className={cn(
                       "transition-colors",
-                      log.message.includes('Polling') ? 'text-amber-500/80' :
-                        log.message.includes('ISR') || log.message.includes('interrupt') ? 'text-sky-400' :
-                          'text-slate-300 group-hover:text-white'
+                      log.message.includes('Polling') ? 'text-amber-600' :
+                        log.message.includes('ISR') || log.message.includes('interrupt') ? 'text-sky-600' :
+                          'text-slate-600 group-hover:text-slate-900'
                     )}>
                       {log.message}
                     </span>
                   </div>
                 )) : (
-                  <div className="h-full flex items-center justify-center text-slate-600 italic">
+                  <div className="h-full flex items-center justify-center text-slate-400 italic">
                     Push 'Run Execution' to initiate simulation sequence...
                   </div>
                 )}
@@ -285,36 +306,64 @@ export default function IOSimulatorDashboard() {
               </div>
             </div>
 
-            {/* Charts - Fix the "White Box" here */}
+            {/* Intelligence - Comparing the 2 models */}
             <div className="bento-item p-8">
-              <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-purple-500" /> Intelligence
+              <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-purple-600" /> Intelligence
               </h3>
 
               <div className="space-y-10">
-                <div className="h-[180px]">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase mb-4 tracking-widest">CPU Efficiency Delta</p>
+                <div className="h-[220px]">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-4 tracking-widest text-center italic">CPU Availability for User App (%)</p>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
-                      <XAxis dataKey="name" hide />
+                    <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                      <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
                       <RechartsTooltip
-                        content={<CustomTooltip />}
-                        cursor={{ fill: 'rgba(255, 255, 255, 0.03)' }} // FIX: subtle dark cursor instead of white box
+                        cursor={{ fill: 'rgba(0, 0, 0, 0.02)' }}
+                        content={({ active, payload }: any) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="glass-card p-3 border border-sky-500/30">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{data.name}</p>
+                                <p className="text-sm font-mono text-sky-600">Availability: <span className="font-bold">{data.availability}%</span></p>
+                                <p className="text-[10px] text-slate-400">Total Checks: {data.checks}</p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
                       />
-                      <Bar dataKey="checks" radius={[6, 6, 0, 0]}>
+                      <Bar dataKey="availability" radius={[6, 6, 0, 0]} barSize={40}>
                         {chartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={index === 0 ? '#f59e0b' : '#0ea5e9'} />
+                          <Cell key={`cell-${index}`} fill={index === 0 ? '#f59e0b' : '#0284c7'} />
                         ))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
 
-                <div className="space-y-3">
-                  <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Insights</h4>
+                <div className="space-y-4 pt-6 border-t border-slate-100">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-between">
+                    Efficiency Insights
+                    <span className="text-sky-600 font-mono">Delta</span>
+                  </h4>
                   <ul className="space-y-4">
-                    <InsightItem title="CPU Utilization" desc={mode === IOMode.INTERRUPT ? "100% Availability preserved." : "Cycles wasted in busy-waiting."} />
-                    <InsightItem title="Interrupt Overhead" desc="Context switch cost is constant." />
+                    <InsightItem
+                      title="CPU Availability Delta"
+                      desc={history['POLLING'].checks > 0
+                        ? `Polling traps the CPU in a wait-loop, reducing availability by ${100 - getAvailability(history['POLLING'].checks)}%.`
+                        : "Run Polling to see multi-tasking impact."}
+                      value={history['POLLING'].checks > 0 ? `-${100 - getAvailability(history['POLLING'].checks)}%` : "0%"}
+                      isNegative
+                    />
+                    <InsightItem
+                      title="Model Efficiency Score"
+                      desc={mode === IOMode.INTERRUPT ? "100% Efficiency: No wasted cycles." : "Efficiency dropped due to synchronous waiting."}
+                      value={mode === IOMode.INTERRUPT ? "100/100" : `${Math.max(20, 100 - (history['POLLING'].checks * 8))}/100`}
+                      isPositive={mode === IOMode.INTERRUPT}
+                      isNegative={mode === IOMode.POLLING && history['POLLING'].checks > 0}
+                    />
                   </ul>
                 </div>
               </div>
@@ -328,20 +377,20 @@ export default function IOSimulatorDashboard() {
 
 // --- Internal UI Fragments ---
 
-function BentoMetric({ label, value, unit, icon, trend, color = "text-sky-400" }: any) {
+function BentoMetric({ label, value, unit, icon, trend, color = "text-sky-600" }: any) {
   return (
-    <div className="bento-item p-6 group hover:scale-[1.02] transition-transform">
+    <div className="bento-item p-6 group hover:translate-y-[-2px]">
       <div className="flex justify-between items-start mb-4">
-        <div className={cn("p-2 rounded-xl bg-slate-900 border border-white/5", color)}>
+        <div className={cn("p-2.5 rounded-xl bg-slate-50 border border-slate-100 shadow-sm", color)}>
           {icon}
         </div>
-        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{trend}</span>
+        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{trend}</span>
       </div>
       <div className="flex items-baseline gap-1">
-        <h4 className="text-3xl font-black text-white">{value}</h4>
-        <span className="text-sm font-medium text-slate-500">{unit}</span>
+        <h4 className="text-3xl font-black text-slate-900">{value}</h4>
+        <span className="text-sm font-medium text-slate-400">{unit}</span>
       </div>
-      <p className="text-[10px] font-bold text-slate-500 uppercase mt-1 tracking-widest">{label}</p>
+      <p className="text-[10px] font-bold text-slate-400 uppercase mt-1 tracking-widest">{label}</p>
     </div>
   );
 }
@@ -351,20 +400,20 @@ function NodeNode({ label, icon, active }: any) {
     <div className="flex flex-col items-center gap-4 relative z-10">
       <motion.div
         animate={active ? {
-          scale: [1, 1.1, 1],
-          boxShadow: ["0 0 0px #0ea5e9", "0 0 20px #0ea5e9", "0 0 0px #0ea5e9"]
+          scale: [1, 1.05, 1],
+          boxShadow: ["0 0 0px rgba(14, 165, 233, 0.2)", "0 0 20px rgba(14, 165, 233, 0.4)", "0 0 0px rgba(14, 165, 233, 0.2)"]
         } : {}}
         transition={{ repeat: Infinity, duration: 2 }}
         className={cn(
           "w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-500 border",
-          active ? "bg-sky-500 border-sky-400 text-white" : "bg-slate-900 border-slate-800 text-slate-600"
+          active ? "bg-sky-600 border-sky-500 text-white shadow-lg shadow-sky-200" : "bg-white border-slate-100 text-slate-400"
         )}
       >
         {React.cloneElement(icon, { size: 28 })}
       </motion.div>
       <span className={cn(
         "text-[10px] font-black uppercase tracking-widest transition-colors",
-        active ? "text-sky-400" : "text-slate-600"
+        active ? "text-sky-600" : "text-slate-400"
       )}>
         {label}
       </span>
@@ -379,34 +428,44 @@ function ModeToggle({ active, onClick, label, desc, icon }: any) {
       className={cn(
         "w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left group",
         active
-          ? "bg-sky-500/10 border-sky-500/30 ring-1 ring-sky-500/20"
-          : "bg-slate-900/50 border-slate-800 hover:border-slate-700"
+          ? "bg-sky-50 border-sky-200 ring-2 ring-sky-100 shadow-sm"
+          : "bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50"
       )}
     >
       <div className={cn(
         "p-2.5 rounded-lg transition-colors",
-        active ? "bg-sky-500 text-white" : "bg-slate-800 text-slate-500 group-hover:text-slate-300"
+        active ? "bg-sky-600 text-white" : "bg-slate-50 text-slate-400 group-hover:text-slate-500"
       )}>
         {icon}
       </div>
       <div>
-        <div className={cn("text-xs font-bold uppercase tracking-widest", active ? "text-white" : "text-slate-400 group-hover:text-slate-300")}>
+        <div className={cn("text-xs font-bold uppercase tracking-widest", active ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700")}>
           {label}
         </div>
-        <div className="text-[10px] text-slate-600 mt-0.5">{desc}</div>
+        <div className="text-[10px] text-slate-400 mt-0.5">{desc}</div>
       </div>
     </button>
   );
 }
 
-function InsightItem({ title, desc }: any) {
+function InsightItem({ title, desc, value, isPositive, isNegative }: any) {
   return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2">
-        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{title}</span>
+    <div className="flex items-start justify-between p-3 rounded-lg border border-slate-50 bg-slate-50/30">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          {isPositive ? <Zap className="w-3 h-3 text-emerald-500" /> : <Info className="w-3 h-3 text-sky-500" />}
+          <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">{title}</span>
+        </div>
+        <p className="text-[10px] text-slate-500 leading-tight">{desc}</p>
       </div>
-      <p className="text-[10px] text-slate-600 pl-5 leading-tight">{desc}</p>
+      {value && (
+        <span className={cn(
+          "text-xs font-mono font-bold",
+          isPositive ? "text-emerald-600" : isNegative ? "text-amber-600" : "text-slate-400"
+        )}>
+          {value}
+        </span>
+      )}
     </div>
   );
 }
