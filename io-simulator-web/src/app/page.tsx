@@ -93,22 +93,32 @@ export default function IOSimulatorDashboard() {
 
   const resetSimulation = () => {
     engineRef.current?.reset();
+    setHistory({
+      ['INTERRUPT']: { rt: 0, checks: 0 },
+      ['POLLING']: { rt: 0, checks: 0 }
+    });
+    setLogs([]);
+    setRequests([]);
     setIsSimulating(false);
   };
 
   const currentRequest = requests[requests.length - 1];
 
-  const getAvailability = (checks: number) => Math.max(10, 100 - (checks * 4)); // Min 10% for visual presence
+  const getAvailability = (checks: number, isSelected: boolean) => {
+    // If it's the selected mode but hasn't run yet, show theoretical potential
+    if (isSelected && checks === 0) return mode === IOMode.INTERRUPT ? 100 : 85;
+    return Math.max(10, 100 - (checks * 4));
+  };
 
   const chartData = [
     {
       name: 'Polling Loop',
-      availability: getAvailability(history['POLLING'].checks),
+      availability: getAvailability(history['POLLING'].checks, mode === IOMode.POLLING),
       checks: history['POLLING'].checks
     },
     {
       name: 'Interrupt-Driven',
-      availability: getAvailability(history['INTERRUPT'].checks),
+      availability: getAvailability(history['INTERRUPT'].checks, mode === IOMode.INTERRUPT),
       checks: history['INTERRUPT'].checks
     }
   ];
@@ -351,18 +361,18 @@ export default function IOSimulatorDashboard() {
                   <ul className="space-y-4">
                     <InsightItem
                       title="CPU Availability Delta"
-                      desc={history['POLLING'].checks > 0
-                        ? `Polling traps the CPU in a wait-loop, reducing availability by ${100 - getAvailability(history['POLLING'].checks)}%.`
+                      desc={history['POLLING'].checks > 0 || mode === IOMode.POLLING
+                        ? `Polling traps the CPU in a wait-loop, reducing potential availability by ${100 - getAvailability(history['POLLING'].checks, mode === IOMode.POLLING)}%.`
                         : "Run Polling to see multi-tasking impact."}
-                      value={history['POLLING'].checks > 0 ? `-${100 - getAvailability(history['POLLING'].checks)}%` : "0%"}
+                      value={history['POLLING'].checks > 0 || mode === IOMode.POLLING ? `-${100 - getAvailability(history['POLLING'].checks, mode === IOMode.POLLING)}%` : "0%"}
                       isNegative
                     />
                     <InsightItem
                       title="Model Efficiency Score"
                       desc={mode === IOMode.INTERRUPT ? "100% Efficiency: No wasted cycles." : "Efficiency dropped due to synchronous waiting."}
-                      value={mode === IOMode.INTERRUPT ? "100/100" : `${Math.max(20, 100 - (history['POLLING'].checks * 8))}/100`}
+                      value={mode === IOMode.INTERRUPT ? "100/100" : `${Math.max(20, 100 - (history['POLLING'].checks * 8 || 15))}/100`}
                       isPositive={mode === IOMode.INTERRUPT}
-                      isNegative={mode === IOMode.POLLING && history['POLLING'].checks > 0}
+                      isNegative={mode === IOMode.POLLING}
                     />
                   </ul>
                 </div>
