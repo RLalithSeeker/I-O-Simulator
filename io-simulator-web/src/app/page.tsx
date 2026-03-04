@@ -51,6 +51,7 @@ export default function IOSimulatorDashboard() {
   const [mode, setMode] = useState<IOMode>(IOMode.INTERRUPT);
   const [serviceTime, setServiceTime] = useState(300);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [flowStep, setFlowStep] = useState(-1); // -1 = idle
 
   // Persistent history for comparison
   const [history, setHistory] = useState<Record<string, { rt: number; checks: number }>>({
@@ -75,9 +76,28 @@ export default function IOSimulatorDashboard() {
   const runSimulation = async () => {
     if (!engineRef.current || isSimulating) return;
     setIsSimulating(true);
+    setFlowStep(0); // I/O Request
+    await new Promise(r => setTimeout(r, 200));
+    setFlowStep(1); // Application Layer
+    await new Promise(r => setTimeout(r, 250));
+    setFlowStep(2); // System Call Interface
+    await new Promise(r => setTimeout(r, 250));
+    setFlowStep(3); // OS I/O Manager
+    await new Promise(r => setTimeout(r, 250));
+    setFlowStep(4); // Device Driver
+    await new Promise(r => setTimeout(r, 300));
+    setFlowStep(5); // Controller
+    await new Promise(r => setTimeout(r, serviceTime * 0.4));
+    setFlowStep(6); // I/O Device
     const result = await engineRef.current.runRequest('Disk0', IOType.READ, mode, 4.0, serviceTime);
+    setFlowStep(7); // Completion Signal
+    await new Promise(r => setTimeout(r, 200));
+    setFlowStep(8); // Decision node
+    await new Promise(r => setTimeout(r, 400));
+    setFlowStep(mode === IOMode.POLLING ? 9 : 10); // Branch
+    await new Promise(r => setTimeout(r, 400));
+    setFlowStep(11); // Resume
 
-    // Update comparison history
     if (result) {
       setHistory(prev => ({
         ...prev,
@@ -87,7 +107,6 @@ export default function IOSimulatorDashboard() {
         }
       }));
     }
-
     setIsSimulating(false);
   };
 
@@ -100,6 +119,7 @@ export default function IOSimulatorDashboard() {
     setLogs([]);
     setRequests([]);
     setIsSimulating(false);
+    setFlowStep(-1); // Reset flowchart
   };
 
   const currentRequest = requests[requests.length - 1];
@@ -167,7 +187,7 @@ export default function IOSimulatorDashboard() {
 
         <main className="grid grid-cols-12 gap-6 items-start">
           {/* Dashboard Left - Metrics & Visualizer */}
-          <div className="col-span-8 space-y-6">
+          <div className="col-span-5 space-y-6">
             <div className="grid grid-cols-3 gap-6">
               <BentoMetric
                 label="Latency"
@@ -266,8 +286,13 @@ export default function IOSimulatorDashboard() {
             </div>
           </div>
 
+          {/* Center Column - Animated Flowchart */}
+          <div className="col-span-4">
+            <FlowchartPanel flowStep={flowStep} mode={mode} />
+          </div>
+
           {/* Dashboard Right - Controls & Data */}
-          <div className="col-span-4 space-y-6">
+          <div className="col-span-3 space-y-6">
             {/* Control Panel */}
             <div className="bento-item p-8">
               <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
@@ -476,6 +501,142 @@ function InsightItem({ title, desc, value, isPositive, isNegative }: any) {
           {value}
         </span>
       )}
+    </div>
+  );
+}
+
+// --- Animated Flowchart Panel ---
+
+const FLOW_STEPS = [
+  { id: 0, label: 'I/O Request + Mode', sub: 'User initiates operation' },
+  { id: 1, label: 'Application Layer', sub: 'Creates I/O request' },
+  { id: 2, label: 'System Call Interface', sub: 'Traps to kernel' },
+  { id: 3, label: 'OS I/O Manager', sub: 'Queues + routes request' },
+  { id: 4, label: 'Device Driver', sub: 'Translates to device command' },
+  { id: 5, label: 'Controller', sub: 'Runs device operation' },
+  { id: 6, label: 'I/O Device', sub: 'Performs read/write' },
+  { id: 7, label: 'Completion Signal', sub: 'Hardware signals done' },
+];
+
+function FlowchartPanel({ flowStep, mode }: { flowStep: number; mode: IOMode }) {
+  const isDecision = flowStep === 8;
+  const isPolling = flowStep === 9;
+  const isInterrupt = flowStep === 10;
+  const isDone = flowStep === 11;
+
+  return (
+    <div className="bento-item p-5 h-full">
+      <div className="flex items-center gap-2 mb-4">
+        <Activity className="w-4 h-4 text-sky-500" />
+        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Live I/O Flowchart</span>
+      </div>
+
+      <div className="flex flex-col items-center gap-0">
+        {FLOW_STEPS.map((step) => (
+          <FlowStep
+            key={step.id}
+            label={step.label}
+            sub={step.sub}
+            isActive={flowStep === step.id}
+            isDone={flowStep > step.id && flowStep !== -1}
+          />
+        ))}
+
+        {/* Decision diamond */}
+        <motion.div
+          animate={isDecision ? { scale: [1, 1.08, 1], boxShadow: ['0 0 0px #a855f7', '0 0 18px #a855f7', '0 0 0px #a855f7'] } : {}}
+          transition={{ repeat: Infinity, duration: 1.2 }}
+          className={cn(
+            'w-24 h-10 rotate-45 flex items-center justify-center border-2 rounded-sm transition-all mt-1',
+            isDecision ? 'border-purple-400 bg-purple-50' :
+              (isDone || isPolling || isInterrupt) ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white'
+          )}
+        >
+          <span className="-rotate-45 text-[9px] font-bold tracking-wide"
+            style={{ color: isDecision ? '#a855f7' : (isDone || isPolling || isInterrupt) ? '#16a34a' : '#94a3b8' }}>
+            Method?
+          </span>
+        </motion.div>
+
+        {/* Two branches */}
+        <div className="flex w-full justify-around mt-3 gap-2">
+          <div className="flex flex-col items-center gap-1 flex-1">
+            <motion.div
+              animate={isPolling ? { scale: [1, 1.05, 1], boxShadow: ['0 0 0px #f59e0b', '0 0 14px #f59e0b', '0 0 0px #f59e0b'] } : {}}
+              transition={{ repeat: Infinity, duration: 1 }}
+              className={cn(
+                'w-full text-center border-2 rounded-xl p-2.5 transition-all',
+                isPolling ? 'bg-amber-50 border-amber-400' : (isDone && mode === IOMode.POLLING) ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-slate-200'
+              )}
+            >
+              <p className={cn('text-[9px] font-bold uppercase tracking-widest', isPolling ? 'text-amber-600' : 'text-slate-400')}>Polling</p>
+              <p className="text-[8px] text-slate-400">Check Status</p>
+            </motion.div>
+          </div>
+
+          <div className="flex flex-col items-center gap-1 flex-1">
+            <motion.div
+              animate={isInterrupt ? { scale: [1, 1.05, 1], boxShadow: ['0 0 0px #0ea5e9', '0 0 14px #0ea5e9', '0 0 0px #0ea5e9'] } : {}}
+              transition={{ repeat: Infinity, duration: 1 }}
+              className={cn(
+                'w-full text-center border-2 rounded-xl p-2.5 transition-all',
+                isInterrupt ? 'bg-sky-50 border-sky-400' : (isDone && mode === IOMode.INTERRUPT) ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-slate-200'
+              )}
+            >
+              <p className={cn('text-[9px] font-bold uppercase tracking-widest', isInterrupt ? 'text-sky-600' : 'text-slate-400')}>Interrupt</p>
+              <p className="text-[8px] text-slate-400">ISR Runs</p>
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Resume */}
+        <div className="flex flex-col items-center mt-3 w-full">
+          <div className="w-[1px] h-3 bg-slate-200" />
+          <motion.div
+            animate={isDone ? { scale: [1, 1.04, 1] } : {}}
+            transition={{ duration: 0.5 }}
+            className={cn(
+              'w-full text-center border-2 rounded-xl p-3 transition-all',
+              isDone ? 'bg-emerald-50 border-emerald-400 shadow-md shadow-emerald-100' : 'bg-white border-slate-200'
+            )}
+          >
+            <p className={cn('text-[10px] font-bold', isDone ? 'text-emerald-600' : 'text-slate-400')}>
+              {isDone ? '✓ App Resumed' : 'Resume App Execution'}
+            </p>
+          </motion.div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FlowStep({ label, sub, isActive, isDone }: any) {
+  return (
+    <div className="flex flex-col items-center w-full">
+      <motion.div
+        animate={isActive ? {
+          scale: [1, 1.04, 1],
+          boxShadow: ['0 0 0px rgba(14, 165, 233, 0.3)', '0 0 16px rgba(14, 165, 233, 0.5)', '0 0 0px rgba(14, 165, 233, 0.3)']
+        } : {}}
+        transition={{ repeat: Infinity, duration: 1.2 }}
+        className={cn(
+          'w-full border-2 rounded-xl px-3 py-2 text-center transition-all duration-400',
+          isActive ? 'bg-sky-50 border-sky-400 shadow-md shadow-sky-100' :
+            isDone ? 'bg-emerald-50 border-emerald-300' :
+              'bg-white border-slate-200'
+        )}
+      >
+        <p className={cn(
+          'text-[10px] font-bold uppercase tracking-wide leading-tight flex items-center justify-center gap-1',
+          isActive ? 'text-sky-700' : isDone ? 'text-emerald-600' : 'text-slate-400'
+        )}>
+          {isActive && <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse inline-block" />}
+          {isDone && '✓ '}{label}
+        </p>
+        <p className={cn('text-[9px] mt-0.5', isActive ? 'text-sky-500' : isDone ? 'text-emerald-400' : 'text-slate-300')}>{sub}</p>
+      </motion.div>
+      <div className={cn('w-[1px] h-3 transition-colors', isDone || isActive ? 'bg-sky-300' : 'bg-slate-200')} />
+      <div className={cn('w-0 h-0 border-l-[4px] border-r-[4px] border-t-[5px] border-l-transparent border-r-transparent transition-colors', isDone || isActive ? 'border-t-sky-300' : 'border-t-slate-200')} />
     </div>
   );
 }
