@@ -1,0 +1,59 @@
+name: Create Release ZIP
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set release tag
+        id: tag
+        run: echo "TAG=release-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Create project ZIP (excluding node_modules and .git)
+        run: |
+          zip -r IO-Simulator-${{ steps.tag.outputs.TAG }}.zip . \
+            --exclude "*.git*" \
+            --exclude "*/node_modules/*" \
+            --exclude "*/.next/*" \
+            --exclude "*/__pycache__/*" \
+            --exclude "*.pyc"
+
+      - name: Create GitHub Release with ZIP
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.TAG }}
+          name: "IO Simulator - ${{ steps.tag.outputs.TAG }}"
+          body: |
+            ## OS I/O Simulator Release
+
+            ### What's Included
+            - **Web UI** (`io-simulator-web/`): Next.js interactive dashboard
+            - **CLI** (`main.py`, `models.py`, etc.): Python-based simulator
+            - **Documentation**: `README.md`, `FEATURES.md`, `SYSTEM_DESIGN.md`
+
+            ### How to Run Web UI
+            ```bash
+            cd io-simulator-web
+            npm install
+            npm run dev
+            ```
+            Then open http://localhost:3000
+
+            ### How to Run CLI
+            ```bash
+            pip install matplotlib
+            python main.py
+            ```
+          files: IO-Simulator-${{ steps.tag.outputs.TAG }}.zip
+          draft: false
+          prerelease: false
